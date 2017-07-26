@@ -45,8 +45,6 @@ func NewReader(path string) (*MmapReader, error) {
 		return nil, fmt.Errorf("mmap NewReader: %q %s", path, err)
 	}
 
-	mutex := sync.RWMutex{}
-
 	size := info.Size()
 	switch {
 	case size < 0:
@@ -55,7 +53,7 @@ func NewReader(path string) (*MmapReader, error) {
 			path, size,
 		)
 	case size == 0:
-		return &MmapReader{[]byte{}, mutex}, nil
+		return &MmapReader{[]byte{}, sync.RWMutex{}}, nil
 	case size != int64(int(size)):
 		return nil, fmt.Errorf(
 			"mmap NewReader: %q size is too large %v",
@@ -73,7 +71,7 @@ func NewReader(path string) (*MmapReader, error) {
 
 	return &MmapReader{
 		data:  data,
-		close: mutex,
+		close: sync.RWMutex{},
 	}, nil
 }
 
