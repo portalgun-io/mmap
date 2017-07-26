@@ -7,17 +7,32 @@ import (
 	"syscall"
 )
 
+// MmapReader represents a read-only memory mapped file.
+//
 type MmapReader struct {
 	data  []byte
 	close sync.RWMutex
 }
 
+// MmapWriter represents a read/write memory mapped file.
+//
+// It includes the methods supported by a MmapWriter.
+//
 type MmapWriter struct {
 	MmapReader
 	write sync.RWMutex
 	path  string
 }
 
+// NewReader takes a file path and returns a MmapReader and an error.
+//
+// It uses os.Open to open the file and then file.Stat to get information
+// about the file. Errors from those calls will be returned.
+//
+// The file handle does not have to be kept open. The kernel keeps the
+// relationship between the mmap and the file on disk until the mmap is
+// unmapped.
+//
 func NewReader(path string) (*MmapReader, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -35,14 +50,23 @@ func NewReader(path string) (*MmapReader, error) {
 	size := info.Size()
 	switch {
 	case size < 0:
-		return nil, fmt.Errorf("mmap NewReader: %q has negative size %v", path, size)
+		return nil, fmt.Errorf(
+			"mmap NewReader: %q has negative size %v",
+			path, size,
+		)
 	case size == 0:
 		return &MmapReader{[]byte{}, mutex}, nil
 	case size != int64(int(size)):
-		return nil, fmt.Errorf("mmap NewReader: %q size is too large %v", path, size)
+		return nil, fmt.Errorf(
+			"mmap NewReader: %q size is too large %v",
+			path, size,
+		)
 	}
 
-	data, err := syscall.Mmap(int(file.Fd()), 0, int(size), syscall.PROT_READ, syscall.MAP_SHARED)
+	data, err := syscall.Mmap(
+		int(file.Fd()), 0, int(size),
+		syscall.PROT_READ, syscall.MAP_SHARED,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("mmap NewReader: %q %s", path, err)
 	}
@@ -53,6 +77,19 @@ func NewReader(path string) (*MmapReader, error) {
 	}, nil
 }
 
+// NewWriter takes a file path and returns a MmapWriter and an error.
+//
+// It uses os.OpenFile to open the file and then file.Stat to get information
+// about the file. The OpenFile options are similar to os.Create except that
+// it doesn't truncate the file. Errors from those calls will be returned.
+//
+// If the file doesn't exist, the file is resized to the result of
+// os.Getpagesize(), which is typically 4KB.
+//
+// The file handle does not have to be kept open. The kernel keeps the
+// relationship between the mmap and the file on disk until the mmap is
+// unmapped.
+//
 func NewWriter(path string) (*MmapWriter, error) {
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
