@@ -9,7 +9,7 @@ import (
 
 const syncFlags = uintptr(syscall.MS_SYNC | syscall.MS_INVALIDATE)
 
-func (wm *writemap) Sync() error {
+func (wm *MmapWriter) Sync() error {
 	// Sync is in its own file to limit use of unsafe standard library
 
 	wm.write.Lock()

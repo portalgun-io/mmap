@@ -4,61 +4,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
-	"syscall"
 )
 
-type writemap struct {
-	readmap
-	write *sync.RWMutex
-	path  string
-}
-
-func NewWriter(path string) (MmapWriter, error) {
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		return nil, fmt.Errorf("mmap: NewWriter %q %s", path, err)
-	}
-	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("mmap: NewWriter %q %s", path, err)
-	}
-
-	size := info.Size()
-	if size == 0 {
-		size = int64(pageSize)
-		if err := file.Truncate(size); err != nil {
-			return nil, fmt.Errorf("mmap: NewWriter %q %s", path, err)
-		}
-	}
-
-	switch {
-	case size < 0:
-		return nil, fmt.Errorf("mmap: NewWriter %q has negative size %v", path, size)
-	case size == 0:
-		return &writemap{}, nil
-	case size != int64(int(size)):
-		return nil, fmt.Errorf("mmap: NewWriter %q size is too large %v", path, size)
-	}
-
-	data, err := syscall.Mmap(int(file.Fd()), 0, int(size), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
-	if err != nil {
-		return nil, fmt.Errorf("mmap: NewWriter %q %s", path, err)
-	}
-
-	return &writemap{
-		readmap{
-			data:  data,
-			close: &sync.RWMutex{},
-		},
-		&sync.RWMutex{},
-		path,
-	}, nil
-}
-
-func (wm *writemap) WriteByteAt(value byte, off int64) error {
+func (wm *MmapWriter) WriteByteAt(value byte, off int64) error {
 	if wm.data == nil {
 		return fmt.Errorf("mmap WriteByteAt: closed")
 	}
@@ -73,13 +21,13 @@ func (wm *writemap) WriteByteAt(value byte, off int64) error {
 	return nil
 }
 
-func (wm *writemap) WriteAt(p []byte, off int64) (int, error) {
+func (wm *MmapWriter) WriteAt(p []byte, off int64) (int, error) {
 	if wm.data == nil {
 		return 0, fmt.Errorf("mmap WriteAt: closed")
 	}
 
 	if off < 0 || int64(len(wm.data)) < off {
-		return 0, fmt.Errorf("mmap WriteAt: invalid WriteAt offset %d", off)
+		return 0, fmt.Errorf("mmap WriteAt: offset %d out of range [0, %d)", off, len(wm.data))
 	}
 
 	n := copy(wm.data[off:], p)
@@ -90,7 +38,23 @@ func (wm *writemap) WriteAt(p []byte, off int64) (int, error) {
 	return n, nil
 }
 
-func (wm *writemap) Close() error {
+func (wm *MmapWriter) Region(off int64, ln int64) ([]byte, error) {
+	if wm.data == nil {
+		return nil, fmt.Errorf("mmap Region: closed")
+	}
+
+	if off < 0 || int64(len(wm.data)) < off {
+		return nil, fmt.Errorf("mmap Region: offset %d out of range [0, %d)", off, len(wm.data))
+	}
+
+	if int64(len(wm.data)) < off+ln {
+		return nil, fmt.Errorf("mmap Region: offset + length %d out of range [0, %d)", off+ln, len(wm.data))
+	}
+
+	return wm.data[off : off+ln], nil
+}
+
+func (wm *MmapWriter) Close() error {
 	if wm.data == nil {
 		return nil
 	}
@@ -98,10 +62,10 @@ func (wm *writemap) Close() error {
 	wm.write.Lock()
 	defer wm.write.Unlock()
 
-	return wm.readmap.Close()
+	return wm.MmapReader.Close()
 }
 
-func (wm *writemap) AddPages(count int) error {
+func (wm *MmapWriter) AddPages(count int) error {
 	if count <= 0 {
 		return fmt.Errorf("mmap AddPages: count must be greater than 0: %d", count)
 	}
@@ -126,7 +90,7 @@ func (wm *writemap) AddPages(count int) error {
 		return fmt.Errorf("mmap AddPages: %s", err)
 	}
 
-	wm.data = writer.(*writemap).data
+	wm.data = writer.data
 
 	return nil
 }

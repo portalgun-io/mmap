@@ -3,59 +3,24 @@ package mmap
 import (
 	"fmt"
 	"os"
-	"sync"
 	"syscall"
 )
 
-type readmap struct {
-	data  []byte
-	close *sync.RWMutex
+var pageSize int = os.Getpagesize()
+
+func PageSize() int {
+	return pageSize
 }
 
-func NewReader(path string) (MmapReader, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("mmap NewReader: %q %s", path, err)
-	}
-	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("mmap NewReader: %q %s", path, err)
-	}
-
-	mutex := &sync.RWMutex{}
-
-	size := info.Size()
-	switch {
-	case size < 0:
-		return nil, fmt.Errorf("mmap NewReader: %q has negative size %v", path, size)
-	case size == 0:
-		return &readmap{[]byte{}, mutex}, nil
-	case size != int64(int(size)):
-		return nil, fmt.Errorf("mmap NewReader: %q size is too large %v", path, size)
-	}
-
-	data, err := syscall.Mmap(int(file.Fd()), 0, int(size), syscall.PROT_READ, syscall.MAP_SHARED)
-	if err != nil {
-		return nil, fmt.Errorf("mmap NewReader: %q %s", path, err)
-	}
-
-	return &readmap{
-		data:  data,
-		close: mutex,
-	}, nil
-}
-
-func (rm *readmap) Len() int {
+func (rm *MmapReader) Len() int {
 	return len(rm.data)
 }
 
-func (rm *readmap) PageCount() (int, int) {
+func (rm *MmapReader) PageCount() (int, int) {
 	return len(rm.data) / pageSize, len(rm.data) % pageSize
 }
 
-func (rm *readmap) ReadByteAt(off int64) (byte, error) {
+func (rm *MmapReader) ReadByteAt(off int64) (byte, error) {
 	if rm.data == nil {
 		return 0, fmt.Errorf("mmap ReadAtByte: closed")
 	}
@@ -69,7 +34,7 @@ func (rm *readmap) ReadByteAt(off int64) (byte, error) {
 	return rm.data[off], nil
 }
 
-func (rm *readmap) ReadAt(p []byte, off int64) (int, error) {
+func (rm *MmapReader) ReadAt(p []byte, off int64) (int, error) {
 	if rm.data == nil {
 		return 0, fmt.Errorf("mmap Read: closed")
 	}
@@ -84,7 +49,7 @@ func (rm *readmap) ReadAt(p []byte, off int64) (int, error) {
 	return copy(p, rm.data[off:]), nil
 }
 
-func (rm *readmap) Close() error {
+func (rm *MmapReader) Close() error {
 	if rm.data == nil {
 		return nil
 	}
@@ -98,6 +63,6 @@ func (rm *readmap) Close() error {
 	return syscall.Munmap(data)
 }
 
-func (rm *readmap) Closed() bool {
+func (rm *MmapReader) Closed() bool {
 	return rm.data == nil
 }
