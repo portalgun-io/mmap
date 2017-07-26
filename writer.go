@@ -11,6 +11,7 @@ import (
 type writemap struct {
 	readmap
 	write *sync.RWMutex
+	path  string
 }
 
 func NewWriter(path string) (MmapWriter, error) {
@@ -27,7 +28,7 @@ func NewWriter(path string) (MmapWriter, error) {
 
 	size := info.Size()
 	if size == 0 {
-		size = int64(os.Getpagesize())
+		size = int64(pageSize)
 		if err := file.Truncate(size); err != nil {
 			return nil, fmt.Errorf("mmap: NewWriter %q %s", path, err)
 		}
@@ -53,6 +54,7 @@ func NewWriter(path string) (MmapWriter, error) {
 			close: &sync.RWMutex{},
 		},
 		&sync.RWMutex{},
+		path,
 	}, nil
 }
 
@@ -97,4 +99,49 @@ func (wm *writemap) Close() error {
 	defer wm.write.Unlock()
 
 	return wm.readmap.Close()
+}
+
+func (wm *writemap) AddPages(count int) error {
+	if count <= 0 {
+		return fmt.Errorf("mmap AddPages: count must be greater than 0: %d", count)
+	}
+
+	pages, _ := wm.PageCount()
+
+	if err := wm.Close(); err != nil {
+		return fmt.Errorf("mmap AddPages: %s", err)
+	}
+
+	wm.write.Lock()
+	defer wm.write.Unlock()
+
+	size := (int64(pages) + int64(count)) * int64(pageSize)
+
+	if err := resize(wm.path, size); err != nil {
+		return fmt.Errorf("mmap AddPages: %s", err)
+	}
+
+	writer, err := NewWriter(wm.path)
+	if err != nil {
+		return fmt.Errorf("mmap AddPages: %s", err)
+	}
+
+	wm.data = writer.(*writemap).data
+
+	return nil
+}
+
+func resize(path string, size int64) error {
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	err = file.Truncate(size)
+	if err != nil {
+		return err
+	}
+
+	return file.Close()
 }

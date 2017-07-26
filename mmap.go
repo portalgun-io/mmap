@@ -2,10 +2,12 @@ package mmap
 
 import (
 	"io"
+	"os"
 )
 
 type MmapReader interface {
 	Len() int
+	PageCount() (int, int)
 	ReadByteAt(off int64) (byte, error)
 	io.ReaderAt
 	io.Closer
@@ -14,7 +16,14 @@ type MmapReader interface {
 
 type MmapWriter interface {
 	MmapReader
-	Sync() error
 	WriteByteAt(value byte, off int64) error
 	io.WriterAt
+	Sync() error
+	AddPages(count int) error
+}
+
+var pageSize int = os.Getpagesize()
+
+func PageSize() int {
+	return pageSize
 }

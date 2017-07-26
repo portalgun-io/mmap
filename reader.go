@@ -51,6 +51,10 @@ func (rm *readmap) Len() int {
 	return len(rm.data)
 }
 
+func (rm *readmap) PageCount() (int, int) {
+	return len(rm.data) / pageSize, len(rm.data) % pageSize
+}
+
 func (rm *readmap) ReadByteAt(off int64) (byte, error) {
 	if rm.data == nil {
 		return 0, fmt.Errorf("mmap ReadAtByte: closed")
