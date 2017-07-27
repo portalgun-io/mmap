@@ -11,12 +11,12 @@ const syncFlags = uintptr(syscall.MS_SYNC | syscall.MS_INVALIDATE)
 
 // Sync calls Msync to flush buffered writes to disk.
 //
-func (wm *Writer) Sync() error {
+func (w *Writer) Sync() error {
 	// Sync is in its own file to limit use of unsafe standard library
-	wm.write.Lock()
-	defer wm.write.Unlock()
+	w.write.Lock()
+	defer w.write.Unlock()
 
-	header := *(*reflect.SliceHeader)(unsafe.Pointer(&wm.data))
+	header := *(*reflect.SliceHeader)(unsafe.Pointer(&w.data))
 
 	_, _, err := syscall.Syscall(
 		syscall.SYS_MSYNC, uintptr(header.Data),

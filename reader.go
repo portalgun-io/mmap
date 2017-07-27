@@ -16,15 +16,15 @@ func PageSize() int {
 
 // Len return the size of the memory mapped file.
 //
-func (rm *Reader) Len() int {
-	return len(rm.data)
+func (r *Reader) Len() int {
+	return len(r.data)
 }
 
 // PageCount returns the whole number of pages used by the file
 // along with the number of extra bytes at the end of the file.
 //
-func (rm *Reader) PageCount() (int, int) {
-	return len(rm.data) / pageSize, len(rm.data) % pageSize
+func (r *Reader) PageCount() (int, int) {
+	return len(r.data) / pageSize, len(r.data) % pageSize
 }
 
 // ReadByteAt returns the byte in the mapped file at the offset
@@ -33,63 +33,63 @@ func (rm *Reader) PageCount() (int, int) {
 // If the mmap is closed or the offset is out of range,
 // the error will be non-nil.
 //
-func (rm *Reader) ReadByteAt(off int64) (byte, error) {
-	if rm.data == nil {
+func (r *Reader) ReadByteAt(off int64) (byte, error) {
+	if r.data == nil {
 		return 0, fmt.Errorf("mmap ReadAtByte: closed")
 	}
 
-	rm.close.RLock()
-	defer rm.close.RUnlock()
+	r.close.RLock()
+	defer r.close.RUnlock()
 
-	if off < 0 || int64(len(rm.data)) < off {
+	if off < 0 || int64(len(r.data)) < off {
 		return 0, fmt.Errorf(
 			"mmap ReadByteAt: offset %d out of range [0, %d)",
-			off, len(rm.data),
+			off, len(r.data),
 		)
 	}
-	return rm.data[off], nil
+	return r.data[off], nil
 }
 
 // ReadAt reads len(p) bytes into p starting at offset off in the mapped file. It returns the number of bytes read (0 <= n <= len(p)) and any error encountered.
 //
 // It implements the io.ReaderAt interface.
 //
-func (rm *Reader) ReadAt(p []byte, off int64) (int, error) {
-	if rm.data == nil {
+func (r *Reader) ReadAt(p []byte, off int64) (int, error) {
+	if r.data == nil {
 		return 0, fmt.Errorf("mmap Read: closed")
 	}
 
-	rm.close.RLock()
-	defer rm.close.RUnlock()
+	r.close.RLock()
+	defer r.close.RUnlock()
 
-	if off < 0 || int64(len(rm.data)) < off {
+	if off < 0 || int64(len(r.data)) < off {
 		return 0, fmt.Errorf(
 			"mmap Read: offset %d out of range [0, %d)",
-			off, len(rm.data),
+			off, len(r.data),
 		)
 	}
 
-	return copy(p, rm.data[off:]), nil
+	return copy(p, r.data[off:]), nil
 }
 
 // Close unmaps the mmap from the underlying file.
 //
-func (rm *Reader) Close() error {
-	if rm.data == nil {
+func (r *Reader) Close() error {
+	if r.data == nil {
 		return nil
 	}
 
-	rm.close.Lock()
-	defer rm.close.Unlock()
+	r.close.Lock()
+	defer r.close.Unlock()
 
-	data := rm.data
-	rm.data = nil
+	data := r.data
+	r.data = nil
 
 	return syscall.Munmap(data)
 }
 
 // Closed returns whether the map has been closed.
 //
-func (rm *Reader) Closed() bool {
-	return rm.data == nil
+func (r *Reader) Closed() bool {
+	return r.data == nil
 }
