@@ -1,9 +1,9 @@
 // Package mmap provides access to memory mapped files.
 //
-// There are two primary types. The MmapReader is read-only and
-// the MmapWriter is read-write.
+// There are two primary types. The Reader is read-only and
+// the Writer is read-write.
 //
-// An example of using a MmapWriter:
+// An example of using a Writer:
 //
 //     package main
 //
@@ -43,7 +43,7 @@
 //         log.Printf("Sum After: %d\n", sum)
 //     }
 //
-// An example of using a MmapReader:
+// An example of using a Reader:
 //
 //     package main
 //

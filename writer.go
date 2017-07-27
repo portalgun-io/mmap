@@ -8,7 +8,7 @@ import (
 
 // WriteByteAt writes a byte at an offset.
 //
-func (wm *MmapWriter) WriteByteAt(value byte, off int64) error {
+func (wm *Writer) WriteByteAt(value byte, off int64) error {
 	if wm.data == nil {
 		return fmt.Errorf("mmap WriteByteAt: closed")
 	}
@@ -34,7 +34,7 @@ func (wm *MmapWriter) WriteByteAt(value byte, off int64) error {
 //
 // It implements the io.WriterAt interface.
 //
-func (wm *MmapWriter) WriteAt(p []byte, off int64) (int, error) {
+func (wm *Writer) WriteAt(p []byte, off int64) (int, error) {
 	if wm.data == nil {
 		return 0, fmt.Errorf("mmap WriteAt: closed")
 	}
@@ -60,7 +60,7 @@ func (wm *MmapWriter) WriteAt(p []byte, off int64) (int, error) {
 // Changes to the slice will be made to the underlying file when the
 // memory map is flushed to disk.
 //
-func (wm *MmapWriter) Region(off int64, ln int64) ([]byte, error) {
+func (wm *Writer) Region(off int64, ln int64) ([]byte, error) {
 	if wm.data == nil {
 		return nil, fmt.Errorf("mmap Region: closed")
 	}
@@ -84,7 +84,7 @@ func (wm *MmapWriter) Region(off int64, ln int64) ([]byte, error) {
 
 // Close unmaps the mmap from the underlying file.
 //
-func (wm *MmapWriter) Close() error {
+func (wm *Writer) Close() error {
 	if wm.data == nil {
 		return nil
 	}
@@ -92,7 +92,7 @@ func (wm *MmapWriter) Close() error {
 	wm.write.Lock()
 	defer wm.write.Unlock()
 
-	return wm.MmapReader.Close()
+	return wm.Reader.Close()
 }
 
 // AddPages extends the size of the underlying file by a give number of pages.
@@ -101,7 +101,7 @@ func (wm *MmapWriter) Close() error {
 // increasing the size. If a file that is 4.5 pages long is extended by
 // one page, then the file will be 5 pages long, not 5.5 pages.
 //
-func (wm *MmapWriter) AddPages(count int) error {
+func (wm *Writer) AddPages(count int) error {
 	if count <= 0 {
 		return fmt.Errorf(
 			"mmap AddPages: count must be greater than 0: %d",

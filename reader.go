@@ -16,14 +16,14 @@ func PageSize() int {
 
 // Len return the size of the memory mapped file.
 //
-func (rm *MmapReader) Len() int {
+func (rm *Reader) Len() int {
 	return len(rm.data)
 }
 
 // PageCount returns the whole number of pages used by the file
 // along with the number of extra bytes at the end of the file.
 //
-func (rm *MmapReader) PageCount() (int, int) {
+func (rm *Reader) PageCount() (int, int) {
 	return len(rm.data) / pageSize, len(rm.data) % pageSize
 }
 
@@ -33,7 +33,7 @@ func (rm *MmapReader) PageCount() (int, int) {
 // If the mmap is closed or the offset is out of range,
 // the error will be non-nil.
 //
-func (rm *MmapReader) ReadByteAt(off int64) (byte, error) {
+func (rm *Reader) ReadByteAt(off int64) (byte, error) {
 	if rm.data == nil {
 		return 0, fmt.Errorf("mmap ReadAtByte: closed")
 	}
@@ -54,7 +54,7 @@ func (rm *MmapReader) ReadByteAt(off int64) (byte, error) {
 //
 // It implements the io.ReaderAt interface.
 //
-func (rm *MmapReader) ReadAt(p []byte, off int64) (int, error) {
+func (rm *Reader) ReadAt(p []byte, off int64) (int, error) {
 	if rm.data == nil {
 		return 0, fmt.Errorf("mmap Read: closed")
 	}
@@ -74,7 +74,7 @@ func (rm *MmapReader) ReadAt(p []byte, off int64) (int, error) {
 
 // Close unmaps the mmap from the underlying file.
 //
-func (rm *MmapReader) Close() error {
+func (rm *Reader) Close() error {
 	if rm.data == nil {
 		return nil
 	}
@@ -90,6 +90,6 @@ func (rm *MmapReader) Close() error {
 
 // Closed returns whether the map has been closed.
 //
-func (rm *MmapReader) Closed() bool {
+func (rm *Reader) Closed() bool {
 	return rm.data == nil
 }

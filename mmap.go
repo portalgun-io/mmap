@@ -7,24 +7,24 @@ import (
 	"syscall"
 )
 
-// MmapReader represents a read-only memory mapped file.
+// Reader represents a read-only memory mapped file.
 //
-type MmapReader struct {
+type Reader struct {
 	data  []byte
 	close sync.RWMutex
 }
 
-// MmapWriter represents a read/write memory mapped file.
+// Writer represents a read/write memory mapped file.
 //
-// It includes the methods supported by a MmapWriter.
+// It includes the methods supported by a Writer.
 //
-type MmapWriter struct {
-	MmapReader
+type Writer struct {
+	Reader
 	write sync.RWMutex
 	path  string
 }
 
-// NewReader takes a file path and returns a MmapReader and an error.
+// NewReader takes a file path and returns a Reader and an error.
 //
 // It uses os.Open to open the file and then file.Stat to get information
 // about the file. Errors from those calls will be returned.
@@ -33,7 +33,7 @@ type MmapWriter struct {
 // relationship between the mmap and the file on disk until the mmap is
 // unmapped.
 //
-func NewReader(path string) (*MmapReader, error) {
+func NewReader(path string) (*Reader, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("mmap NewReader: %q %s", path, err)
@@ -53,7 +53,7 @@ func NewReader(path string) (*MmapReader, error) {
 			path, size,
 		)
 	case size == 0:
-		return &MmapReader{[]byte{}, sync.RWMutex{}}, nil
+		return &Reader{[]byte{}, sync.RWMutex{}}, nil
 	case size != int64(int(size)):
 		return nil, fmt.Errorf(
 			"mmap NewReader: %q size is too large %v",
@@ -69,13 +69,13 @@ func NewReader(path string) (*MmapReader, error) {
 		return nil, fmt.Errorf("mmap NewReader: %q %s", path, err)
 	}
 
-	return &MmapReader{
+	return &Reader{
 		data:  data,
 		close: sync.RWMutex{},
 	}, nil
 }
 
-// NewWriter takes a file path and returns a MmapWriter and an error.
+// NewWriter takes a file path and returns a Writer and an error.
 //
 // It uses os.OpenFile to open the file and then file.Stat to get information
 // about the file. The OpenFile options are similar to os.Create except that
@@ -88,7 +88,7 @@ func NewReader(path string) (*MmapReader, error) {
 // relationship between the mmap and the file on disk until the mmap is
 // unmapped.
 //
-func NewWriter(path string) (*MmapWriter, error) {
+func NewWriter(path string) (*Writer, error) {
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		return nil, fmt.Errorf("mmap: NewWriter %q %s", path, err)
@@ -112,7 +112,7 @@ func NewWriter(path string) (*MmapWriter, error) {
 	case size < 0:
 		return nil, fmt.Errorf("mmap: NewWriter %q has negative size %v", path, size)
 	case size == 0:
-		return &MmapWriter{}, nil
+		return &Writer{}, nil
 	case size != int64(int(size)):
 		return nil, fmt.Errorf("mmap: NewWriter %q size is too large %v", path, size)
 	}
@@ -122,8 +122,8 @@ func NewWriter(path string) (*MmapWriter, error) {
 		return nil, fmt.Errorf("mmap: NewWriter %q %s", path, err)
 	}
 
-	return &MmapWriter{
-		MmapReader{
+	return &Writer{
+		Reader{
 			data:  data,
 			close: sync.RWMutex{},
 		},
