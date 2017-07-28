@@ -1,3 +1,4 @@
+// +build darwin,amd64
 package mmap
 
 import (
