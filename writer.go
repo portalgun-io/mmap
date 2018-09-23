@@ -7,14 +7,14 @@ import (
 // Writer reads from and writes to a map. In addition to the methods of mmap.Reader,
 // it also implements the following interfaces from the io standard package:
 //
-// - Writer (Write)
-// - WriterAt (WriteAt)
-// - ByteWriter (WriteByte)
-// - WriteSeeker (Write, Seek)
-// - WriteCloser (Write, Close)
-// - ReadWriter (Read, Write)
-// - ReadWriteSeeker (Read, Write, Seek)
-// - ReadWriteCloser (Read, Write, Close)
+//     - Writer          (Write)
+//     - WriterAt        (WriteAt)
+//     - ByteWriter      (WriteByte)
+//     - WriteSeeker     (Write, Seek)
+//     - WriteCloser     (Write, Close)
+//     - ReadWriter      (Read, Write)
+//     - ReadWriteSeeker (Read, Write, Seek)
+//     - ReadWriteCloser (Read, Write, Close)
 type Writer struct {
 	*Reader
 }

@@ -7,7 +7,7 @@ import (
 	errorpkg "github.com/go-util/errors"
 )
 
-// Exactly one of O_RDONLY or O_RDWR must be specified.
+// Exactly one of ReadOnly or ReadWrite must be specified.
 // The remaining values may be or'ed in to control behavior.
 const (
 	ReadOnly  int = os.O_RDONLY // open the file read-only
@@ -45,7 +45,7 @@ func Read(name string) (*Map, error) {
 // Write opens a file as a writeable memory map. It will create the file if it doesn't exist with
 // FileMode 0600.  It does not truncate the file, however if the file size is 0, it will resize
 // the file to be size of a memory page as returned by os.Getpagesize(). If a different size is needed,
-// call Resize after opening.
+// call Truncate after opening.
 func Write(name string) (*Map, error) {
 	return Open(name, ReadWrite|Create, 0600)
 }

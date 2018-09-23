@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-// Constants used for whence in seek.
+// Constants used for whence in Seek.
 const (
 	SeekStart   int = 0 // seek relative to the start of the file
 	SeekCurrent int = 1 // seek relative to the current offset
@@ -15,13 +15,13 @@ const (
 // Reader reads from a map. It implements the following interfaces from the
 // io standard package:
 //
-// - Reader (Read)
-// - ReaderAt (ReadAt)
-// - ByteReader (ReadByte)
-// - Seeker (Seek)
-// - Closer (Close)
-// - ReadCloser (Read, Close)
-// - ReadSeeker (Read, Seek)
+//     - Reader     (Read)
+//     - ReaderAt   (ReadAt)
+//     - ByteReader (ReadByte)
+//     - Seeker     (Seek)
+//     - Closer     (Close)
+//     - ReadCloser (Read, Close)
+//     - ReadSeeker (Read, Seek)
 type Reader struct {
 	*Map
 	access sync.RWMutex
@@ -113,7 +113,7 @@ func (r *Reader) Read(b []byte) (n int, err error) {
 
 // ReadAt reads len(b) bytes from the Map starting at offset.
 // It returns the number of bytes read and the error, if any.
-// ReadAt always returns io.EOF when n < len(b).
+// ReadAt returns io.EOF when n < len(b).
 func (r *Reader) ReadAt(b []byte, offset int64) (n int, err error) {
 	r.access.RLock()
 	defer r.access.RUnlock()
