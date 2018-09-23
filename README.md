@@ -1,4 +1,7 @@
 # mmap
+
+[![GoDoc](https://godoc.org/github.com/go-util/mmap?status.svg)](https://godoc.org/github.com/go-util/mmap)
+
 Package mmap provides an interface to memory mapped files.
 
 Memory maps can be opened as read-only with Read or read-write with Write.
