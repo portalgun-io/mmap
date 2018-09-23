@@ -1,4 +1,5 @@
 // +build darwin linux
+
 package mmap
 
 import (
@@ -34,8 +35,8 @@ func mmap(fd uintptr, size int, write bool) ([]byte, error) {
 	}
 
 	var (
-		prot int = unix.PROT_READ
-		flag int = unix.MAP_SHARED
+		prot = unix.PROT_READ
+		flag = unix.MAP_SHARED
 	)
 
 	if write {

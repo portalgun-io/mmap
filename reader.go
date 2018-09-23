@@ -5,10 +5,11 @@ import (
 	"sync"
 )
 
+// Constants used for whence in seek.
 const (
-	SEEK_SET int = 0 // seek relative to the origin of the file
-	SEEK_CUR int = 1 // seek relative to the current offset
-	SEEK_END int = 2 // seek relative to the end
+	SeekStart   int = 0 // seek relative to the start of the file
+	SeekCurrent int = 1 // seek relative to the current offset
+	SeekEnd     int = 2 // seek relative to the end
 )
 
 // Reader reads from a map. It implements the following interfaces from the
@@ -193,11 +194,11 @@ func (r *Reader) Seek(offset int64, whence int) (ret int64, err error) {
 	var pos int64
 
 	switch whence {
-	case SEEK_SET:
+	case SeekStart:
 		pos = offset
-	case SEEK_CUR:
+	case SeekCurrent:
 		pos = int64(r.offset) + offset
-	case SEEK_END:
+	case SeekEnd:
 		pos = int64(len(r.data)) + offset
 	default:
 		return 0, errors.New("invalid whence").Set("name", r.name).Set("whence", whence)

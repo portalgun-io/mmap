@@ -74,6 +74,13 @@ func (w *Writer) Poke(b byte, offset int) error {
 
 	w.data[offset] = b
 
+	if w.wsync {
+		err := msync(w.data, true)
+		if err != nil {
+			return errors.Wrap(err, "sync error").Set("name", w.name)
+		}
+	}
+
 	return nil
 }
 
@@ -105,6 +112,13 @@ func (w *Writer) Write(b []byte) (n int, err error) {
 
 	n = copy(w.data[w.offset:], b)
 	w.offset += n
+
+	if w.wsync {
+		err := msync(w.data, true)
+		if err != nil {
+			return 0, errors.Wrap(err, "sync error").Set("name", w.name)
+		}
+	}
 
 	if n < len(b) {
 		return n, io.ErrShortWrite
@@ -141,9 +155,18 @@ func (w *Writer) WriteAt(b []byte, offset int64) (n int, err error) {
 	}
 
 	n = copy(w.data[offset:], b)
+
+	if w.wsync {
+		err := msync(w.data, true)
+		if err != nil {
+			return 0, errors.Wrap(err, "sync error").Set("name", w.name)
+		}
+	}
+
 	if n < len(b) {
 		return n, io.EOF
 	}
+
 	return n, nil
 }
 
@@ -173,6 +196,13 @@ func (w *Writer) WriteString(s string) (n int, err error) {
 
 	n = copy(w.data[w.offset:], s)
 	w.offset += n
+
+	if w.wsync {
+		err := msync(w.data, true)
+		if err != nil {
+			return 0, errors.Wrap(err, "sync error").Set("name", w.name)
+		}
+	}
 
 	if n < len(s) {
 		return n, io.ErrShortWrite
@@ -204,6 +234,13 @@ func (w *Writer) WriteByte(b byte) error {
 
 	w.data[w.offset] = b
 	w.offset++
+
+	if w.wsync {
+		err := msync(w.data, true)
+		if err != nil {
+			return errors.Wrap(err, "sync error").Set("name", w.name)
+		}
+	}
 
 	return nil
 }

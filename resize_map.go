@@ -36,7 +36,7 @@ func (m *Map) Truncate(size int64) error {
 		return errors.Wrap(err, "could not unmap map before truncate").Set("name", m.name)
 	}
 
-	file, err := os.OpenFile(m.name, O_RDWR, 0)
+	file, err := os.OpenFile(m.name, os.O_RDWR, 0)
 	if err != nil {
 		return errors.Wrap(err, "error opening file for truncate").
 			Set("name", m.name).Set("size", size)

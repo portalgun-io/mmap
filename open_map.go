@@ -19,11 +19,11 @@ func Open(name string, flags int, mode os.FileMode) (*Map, error) {
 	}
 
 	var (
-		write = isSet(flags, O_RDWR)
-		creat = isSet(flags, O_CREATE)
-		excl  = isSet(flags, O_EXCL)
-		wsync = isSet(flags, O_SYNC)
-		trunc = isSet(flags, O_TRUNC)
+		write = isSet(flags, ReadWrite)
+		creat = isSet(flags, Create)
+		excl  = isSet(flags, Exclusive)
+		wsync = isSet(flags, Sync)
+		trunc = isSet(flags, Truncate)
 	)
 
 	switch {
@@ -64,9 +64,8 @@ func Open(name string, flags int, mode os.FileMode) (*Map, error) {
 		if err != nil {
 			if trunc {
 				return nil, errors.New("could not truncate file").Set("name", name)
-			} else {
-				return nil, errors.New("could not resize new or empty file").Set("name", name)
 			}
+			return nil, errors.New("could not resize new or empty file").Set("name", name)
 		}
 
 		info, err = file.Stat()
