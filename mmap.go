@@ -1,134 +1,82 @@
-// +build darwin,amd64
 package mmap
 
 import (
-	"fmt"
 	"os"
 	"sync"
-	"syscall"
+
+	errorpkg "github.com/go-util/errors"
 )
 
-// Reader represents a read-only memory mapped file.
-//
-type Reader struct {
-	data  []byte
-	close sync.RWMutex
+const (
+	// Exactly one of O_RDONLY or O_RDWR must be specified.
+	O_RDONLY int = os.O_RDONLY // open the file read-only.
+	O_RDWR   int = os.O_RDWR   // open the file read-write.
+	// The remaining values may be or'ed in to control behavior.
+	O_CREATE int = os.O_CREATE // create a new file if none exists.
+	O_EXCL   int = os.O_EXCL   // used with O_CREATE, file must not exist.
+	O_SYNC   int = os.O_SYNC   // call Sync() after each write.
+	O_TRUNC  int = os.O_TRUNC  // if possible, truncate file when opened.
+)
+
+func isSet(flags int, bit int) bool {
+	return flags&bit == bit
 }
 
-// Writer represents a read/write memory mapped file.
-//
-// It includes the methods supported by a Writer.
-//
-type Writer struct {
-	Reader
-	write sync.RWMutex
-	path  string
+var errors = errorpkg.NewOptions().Caller()
+
+// Map represents a file on disk that has been mapped into memory.
+type Map struct {
+	sync.RWMutex
+	name    string
+	data    []byte
+	write   bool
+	wsync   bool
+	id      int
+	direct  map[uintptr]Direct
+	readers map[int]*Reader
+	writers map[int]*Writer
 }
 
-// NewReader takes a file path and returns a Reader and an error.
-//
-// It uses os.Open to open the file and then file.Stat to get information
-// about the file. Errors from those calls will be returned.
-//
-// The file handle does not have to be kept open. The kernel keeps the
-// relationship between the mmap and the file on disk until the mmap is
-// unmapped.
-//
-func NewReader(path string) (*Reader, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("mmap NewReader: %q %s", path, err)
-	}
-	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("mmap NewReader: %q %s", path, err)
-	}
-
-	size := info.Size()
-	switch {
-	case size < 0:
-		return nil, fmt.Errorf(
-			"mmap NewReader: %q has negative size %v",
-			path, size,
-		)
-	case size == 0:
-		return &Reader{[]byte{}, sync.RWMutex{}}, nil
-	case size != int64(int(size)):
-		return nil, fmt.Errorf(
-			"mmap NewReader: %q size is too large %v",
-			path, size,
-		)
-	}
-
-	data, err := syscall.Mmap(
-		int(file.Fd()), 0, int(size),
-		syscall.PROT_READ, syscall.MAP_SHARED,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("mmap NewReader: %q %s", path, err)
-	}
-
-	return &Reader{
-		data:  data,
-		close: sync.RWMutex{},
-	}, nil
+// Read opens a file as a read-only memory map.
+func Read(name string) (*Map, error) {
+	return Open(name, O_RDONLY, 0)
 }
 
-// NewWriter takes a file path and returns a Writer and an error.
-//
-// It uses os.OpenFile to open the file and then file.Stat to get information
-// about the file. The OpenFile options are similar to os.Create except that
-// it doesn't truncate the file. Errors from those calls will be returned.
-//
-// If the file doesn't exist, the file is resized to the result of
-// os.Getpagesize(), which is typically 4KB.
-//
-// The file handle does not have to be kept open. The kernel keeps the
-// relationship between the mmap and the file on disk until the mmap is
-// unmapped.
-//
-func NewWriter(path string) (*Writer, error) {
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		return nil, fmt.Errorf("mmap: NewWriter %q %s", path, err)
-	}
-	defer file.Close()
+// Write opens a file as a writeable memory map. It will create the file if it doesn't exist with
+// FileMode 0600.  It does not truncate the file, however if the file size is 0, it will resize
+// the file to be size of a memory page as returned by os.Getpagesize(). If a different size is needed,
+// call Resize after opening.
+func Write(name string) (*Map, error) {
+	return Open(name, O_RDWR|O_CREATE, 0600)
+}
 
-	info, err := file.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("mmap: NewWriter %q %s", path, err)
-	}
+// Size returns the size of the map.
+func (m *Map) Size() int {
+	m.RLock()
+	defer m.RUnlock()
 
-	size := info.Size()
-	if size == 0 {
-		size = int64(pageSize)
-		if err := file.Truncate(size); err != nil {
-			return nil, fmt.Errorf("mmap: NewWriter %q %s", path, err)
-		}
-	}
+	return len(m.data)
+}
 
-	switch {
-	case size < 0:
-		return nil, fmt.Errorf("mmap: NewWriter %q has negative size %v", path, size)
-	case size == 0:
-		return &Writer{}, nil
-	case size != int64(int(size)):
-		return nil, fmt.Errorf("mmap: NewWriter %q size is too large %v", path, size)
-	}
+// Name returns the name of the backing file.
+func (m *Map) Name() string {
+	return m.name
+}
 
-	data, err := syscall.Mmap(int(file.Fd()), 0, int(size), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
-	if err != nil {
-		return nil, fmt.Errorf("mmap: NewWriter %q %s", path, err)
-	}
+// Writeable indicates if the map is writeable.
+func (m *Map) Writeable() bool {
+	return m.write
+}
 
-	return &Writer{
-		Reader{
-			data:  data,
-			close: sync.RWMutex{},
-		},
-		sync.RWMutex{},
-		path,
-	}, nil
+// WriteSync indicates if the map uses synchronous writes.
+func (m *Map) WriteSync() bool {
+	return m.wsync
+}
+
+// Closed indicates if the map is closed.
+func (m *Map) Closed() bool {
+	m.RLock()
+	defer m.RUnlock()
+
+	return m.data == nil
 }

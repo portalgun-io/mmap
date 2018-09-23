@@ -1,151 +1,209 @@
-// +build darwin,amd64
 package mmap
 
 import (
-	"fmt"
 	"io"
-	"os"
 )
 
-// WriteByteAt writes a byte at an offset.
+// Writer reads from and writes to a map. In addition to the methods of mmap.Reader,
+// it also implements the following interfaces from the io standard package:
 //
-func (w *Writer) WriteByteAt(value byte, off int64) error {
+// - Writer (Write)
+// - WriterAt (WriteAt)
+// - ByteWriter (WriteByte)
+// - WriteSeeker (Write, Seek)
+// - WriteCloser (Write, Close)
+// - ReadWriter (Read, Write)
+// - ReadWriteSeeker (Read, Write, Seek)
+// - ReadWriteCloser (Read, Write, Close)
+type Writer struct {
+	*Reader
+}
+
+// Writer returns a new Writer for the map.
+func (m *Map) Writer() (*Writer, error) {
+	m.Lock()
+	defer m.Unlock()
+
+	if m.data == nil {
+		return nil, errors.New("mmap closed")
+	}
+
+	if !m.write {
+		return nil, errors.New("mmap not opened for writing")
+	}
+
+	if len(m.direct) > 0 {
+		return nil, errors.New("mmap has open direct access pointers")
+	}
+
+	id := m.id
+	m.id++
+
+	writer := &Writer{
+		Reader: &Reader{
+			Map: m,
+			id:  id,
+		},
+	}
+
+	m.writers[id] = writer
+
+	return writer, nil
+}
+
+// Poke sets the byte at offset.
+func (w *Writer) Poke(b byte, offset int) error {
+	w.access.RLock()
+	defer w.access.RUnlock()
+
+	if w.closed {
+		return errors.New("mmap writer closed").Set("name", w.name)
+	}
+
+	w.Lock()
+	defer w.Unlock()
+
 	if w.data == nil {
-		return fmt.Errorf("mmap WriteByteAt: closed")
+		return errors.New("mmap closed").Set("name", w.name)
 	}
 
-	w.write.RLock()
-	defer w.write.RUnlock()
-
-	if off < 0 || int64(len(w.data)) < off {
-		return fmt.Errorf(
-			"mmap WriteByteAt: offset %d out of range [0, %d)",
-			off, len(w.data),
-		)
+	if offset < 0 || len(w.data) <= offset {
+		return errors.New("offset out of range").Set("name", w.name).
+			Set("offset", offset).Set("map_size", len(w.data))
 	}
-	w.data[off] = value
+
+	w.data[offset] = b
+
 	return nil
 }
 
-// WriteAt writes len(p) bytes from p to the underlying data stream at the
-// specified offset.
-//
-// It returns the number of bytes written from p (0 <= n <= len(p)) and any
-// error encountered that caused the write to stop early.
-//
-// It implements the io.WriterAt interface.
-//
-func (w *Writer) WriteAt(p []byte, off int64) (int, error) {
+// Write writes len(b) bytes to the File.
+// It returns the number of bytes written and an error, if any.
+// Write returns io.ErrShortWrite when n < len(b).
+func (w *Writer) Write(b []byte) (n int, err error) {
+	w.access.Lock()
+	defer w.access.Unlock()
+
+	if w.closed {
+		return 0, errors.New("mmap writer closed").Set("name", w.name)
+	}
+
+	w.Lock()
+	defer w.Unlock()
+
 	if w.data == nil {
-		return 0, fmt.Errorf("mmap WriteAt: closed")
+		return 0, errors.New("mmap closed").Set("name", w.name)
 	}
 
-	if off < 0 || int64(len(w.data)) < off {
-		return 0, fmt.Errorf(
-			"mmap WriteAt: offset %d out of range [0, %d)",
-			off, len(w.data),
-		)
+	if len(w.data) <= w.offset {
+		return 0, io.EOF
 	}
 
-	n := copy(w.data[off:], p)
-	if n < len(p) {
-		return n, io.EOF
+	if len(b) == 0 {
+		return 0, nil
+	}
+
+	n = copy(w.data[w.offset:], b)
+	w.offset += n
+
+	if n < len(b) {
+		return n, io.ErrShortWrite
 	}
 
 	return n, nil
 }
 
-// Region returns a byte slice of the underlying memory mapped file.
-//
-// The returned byte slice starts at the offset for the length specified.
-// Changes to the slice will be made to the underlying file when the
-// memory map is flushed to disk.
-//
-func (w *Writer) Region(off int64, ln int64) ([]byte, error) {
+// WriteAt writes len(b) bytes to the File starting at byte offset off.
+// It returns the number of bytes written and an error, if any.
+// WriteAt returns io.ErrShortWrite when n < len(b).
+func (w *Writer) WriteAt(b []byte, offset int64) (n int, err error) {
+	w.access.RLock()
+	defer w.access.RUnlock()
+
+	if w.closed {
+		return 0, errors.New("mmap writer closed").Set("name", w.name)
+	}
+
+	w.Lock()
+	defer w.Unlock()
+
 	if w.data == nil {
-		return nil, fmt.Errorf("mmap Region: closed")
+		return 0, errors.New("mmap closed").Set("name", w.name)
 	}
 
-	if off < 0 || int64(len(w.data)) < off {
-		return nil, fmt.Errorf(
-			"mmap Region: offset %d out of range [0, %d)",
-			off, len(w.data),
-		)
+	if len(b) == 0 {
+		return 0, nil
 	}
 
-	if int64(len(w.data)) < off+ln {
-		return nil, fmt.Errorf(
-			"mmap Region: offset + length %d out of range [0, %d)",
-			off+ln, len(w.data),
-		)
+	if offset < 0 || int64(len(w.data)) <= offset {
+		return 0, errors.New("offset out of range").Set("name", w.name).
+			Set("offset", offset).Set("map_size", len(w.data))
 	}
 
-	return w.data[off : off+ln], nil
+	n = copy(w.data[offset:], b)
+	if n < len(b) {
+		return n, io.EOF
+	}
+	return n, nil
 }
 
-// Close unmaps the mmap from the underlying file.
-//
-func (w *Writer) Close() error {
-	if w.data == nil {
-		return nil
+// WriteString is like Write, but writes the contents of string s rather than a slice of bytes.
+func (w *Writer) WriteString(s string) (n int, err error) {
+	w.access.Lock()
+	defer w.access.Unlock()
+
+	if w.closed {
+		return 0, errors.New("mmap writer closed").Set("name", w.name)
 	}
 
-	w.write.Lock()
-	defer w.write.Unlock()
+	w.Lock()
+	defer w.Unlock()
 
-	return w.Reader.Close()
+	if w.data == nil {
+		return 0, errors.New("mmap closed").Set("name", w.name)
+	}
+
+	if len(w.data) <= w.offset {
+		return 0, io.EOF
+	}
+
+	if len(s) == 0 {
+		return 0, nil
+	}
+
+	n = copy(w.data[w.offset:], s)
+	w.offset += n
+
+	if n < len(s) {
+		return n, io.ErrShortWrite
+	}
+
+	return n, nil
 }
 
-// AddPages extends the size of the underlying file by a give number of pages.
-//
-// Extra bytes that are not part of a whole page are not considered when
-// increasing the size. If a file that is 4.5 pages long is extended by
-// one page, then the file will be 5 pages long, not 5.5 pages.
-//
-func (w *Writer) AddPages(count int) error {
-	if count <= 0 {
-		return fmt.Errorf(
-			"mmap AddPages: count must be greater than 0: %d",
-			count,
-		)
+// WriteByte a byte to the map.
+// It returns io.EOF if the writer is at the end of the file.
+func (w *Writer) WriteByte(b byte) error {
+	w.access.Lock()
+	defer w.access.Unlock()
+
+	if w.closed {
+		return errors.New("mmap writer closed").Set("name", w.name)
 	}
 
-	pages, _ := w.PageCount()
+	w.Lock()
+	defer w.Unlock()
 
-	if err := w.Close(); err != nil {
-		return fmt.Errorf("mmap AddPages: %s", err)
+	if w.data == nil {
+		return errors.New("mmap closed").Set("name", w.name)
 	}
 
-	w.write.Lock()
-	defer w.write.Unlock()
-
-	size := (int64(pages) + int64(count)) * int64(pageSize)
-
-	if err := resize(w.path, size); err != nil {
-		return fmt.Errorf("mmap AddPages: %s", err)
+	if len(w.data) <= w.offset {
+		return io.EOF
 	}
 
-	writer, err := NewWriter(w.path)
-	if err != nil {
-		return fmt.Errorf("mmap AddPages: %s", err)
-	}
-
-	w.data = writer.data
+	w.data[w.offset] = b
+	w.offset++
 
 	return nil
-}
-
-func resize(path string, size int64) error {
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	err = file.Truncate(size)
-	if err != nil {
-		return err
-	}
-
-	return file.Close()
 }
