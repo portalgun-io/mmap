@@ -1,6 +1,9 @@
 # mmap
 
 [![GoDoc](https://godoc.org/github.com/go-util/mmap?status.svg)](https://godoc.org/github.com/go-util/mmap)
+[![Build Status](https://travis-ci.org/go-util/mmap.svg?branch=master)](https://travis-ci.org/go-util/mmap)
+[![Go Report Card](https://goreportcard.com/badge/github.com/go-util/mmap)](https://goreportcard.com/report/github.com/go-util/mmap)
+[![Coverage](https://codecov.io/gh/go-util/mmap/branch/master/graph/badge.svg)](https://codecov.io/gh/go-util/mmap)
 
 Package mmap provides an interface to memory mapped files.
 
